@@ -1,9 +1,12 @@
 {
-  "name": "open-wearables",
+  "name": "@kalybr-io/open-wearables",
   "version": "0.1.0",
   "description": "OpenWearables React Native SDK",
   "main": "build/index.js",
   "types": "build/index.d.ts",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "scripts": {
     "build": "expo-module build",
     "clean": "expo-module clean",
@@ -26,9 +29,12 @@
     "wellness",
     "wearable"
   ],
-  "repository": "https://github.com/TheBlueBoxDev/openwereables-react-native-sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kalybr-io/open-wearables-react-native-sdk.git"
+  },
   "bugs": {
-    "url": "https://github.com/TheBlueBoxDev/openwereables-react-native-sdk/issues"
+    "url": "https://github.com/Kalybr-io/open-wearables-react-native-sdk/issues"
   },
   "author": "Nino <ninotell@gmail.com> (https://github.com/ninotell)",
   "license": "MIT",
