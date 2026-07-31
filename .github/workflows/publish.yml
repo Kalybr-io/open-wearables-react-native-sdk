@@ -1,0 +1,42 @@
+name: Publish
+
+# Publishes @kalybr-io/open-wearables to the Kalybr-io GitHub Packages npm
+# registry when a version tag (v*) is pushed. The Expo module is built via the
+# package's own `prepare` / `prepublishOnly` hooks (expo-module-scripts), so the
+# published tarball ships a fresh `build/` alongside the native ios/android/src
+# sources and app.plugin.js declared in package.json "files".
+#
+# Release flow: bump "version" in package.json, commit, then
+#   git tag v0.1.0 && git push origin v0.1.0
+# GITHUB_TOKEN with packages:write authorizes the publish because the package's
+# repository field points at this Kalybr-io repo — no extra secret needed.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@kalybr-io'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish to GitHub Packages
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGES_PAT }}
