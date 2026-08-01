@@ -8,10 +8,12 @@ name: Publish
 #
 # Release flow: bump "version" in package.json, commit, then
 #   git tag v0.1.0 && git push origin v0.1.0
-# GITHUB_TOKEN with packages:write authorizes the publish because the package's
-# repository field points at this Kalybr-io repo — no extra secret needed.
+# Or run it manually from the Actions tab (workflow_dispatch) to publish the
+# current package.json version from the selected branch. Either way, npm publish
+# fails if that version already exists in the registry — bump the version first.
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
