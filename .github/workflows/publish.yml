@@ -61,7 +61,8 @@ jobs:
 
       - name: Build the native Android SDK into Maven Local
         working-directory: native-android
-        run: ./gradlew :sdk:publishReleasePublicationToMavenLocal -PlocalPublishVersion=${{ steps.native.outputs.version }}
+        # Upstream commits gradlew without the executable bit, so it runs through bash.
+        run: bash ./gradlew :sdk:publishReleasePublicationToMavenLocal -PlocalPublishVersion=${{ steps.native.outputs.version }}
 
       - name: Bundle it into android/maven
         run: |
