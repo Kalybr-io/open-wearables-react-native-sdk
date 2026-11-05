@@ -4,6 +4,8 @@ import {
   OpenWearablesModuleEvents,
   HealthDataProvider,
   OWLogLevel,
+  StoredCredentials,
+  SyncStatus,
 } from "./OpenWearables.types";
 
 declare class OpenWearablesModule extends NativeModule<OpenWearablesModuleEvents> {
@@ -18,8 +20,8 @@ declare class OpenWearablesModule extends NativeModule<OpenWearablesModuleEvents
     apiKey: string | null
   ): Promise<void>;
   signOut(): Promise<void>;
-  updateTokens(accessToken: string, refreshToken: string): void;
-  restoreSession(): string;
+  updateTokens(accessToken: string, refreshToken: string | null): void;
+  restoreSession(): string | null;
   isSessionValid(): boolean;
 
   // MARK: - HealthKit Authorization
@@ -29,12 +31,11 @@ declare class OpenWearablesModule extends NativeModule<OpenWearablesModuleEvents
   setSyncInterval(minutes: number): void;
   startBackgroundSync(syncDaysBack: number | null): Promise<boolean>;
   stopBackgroundSync(): Promise<void>;
-  syncNow(): Promise<void>;
   isSyncActive(): boolean;
-  getSyncStatus(): Record<string, any>;
+  getSyncStatus(): SyncStatus;
   resumeSync(): Promise<boolean>;
   resetAnchors(): void;
-  getStoredCredentials(): Record<string, any | null>;
+  getStoredCredentials(): StoredCredentials;
 
   // MARK: - Providers
   getAvailableProviders(): HealthDataProvider[];

@@ -4,13 +4,13 @@ plugins {
 }
 
 group = 'expo.modules.openwearables'
-version = '0.1.0'
+version = '0.2.0'
 
 android {
   namespace "expo.modules.openwearables"
   defaultConfig {
     versionCode 1
-    versionName "0.1.0"
+    versionName "0.2.0"
   }
   lintOptions {
     abortOnError false
@@ -20,8 +20,13 @@ android {
 repositories {
     google()
     mavenCentral()
+    // The native Android SDK isn't on Maven Central: the publish workflow builds it from upstream's
+    // source and bundles it here, with the Samsung Health SDK it depends on. The config plugin adds
+    // the same folder to the app's repositories, which resolve it again when the app is assembled.
+    maven { url "$projectDir/maven" }
 }
 
 dependencies {
-    implementation("com.openwearables.health:sdk:0.11.1")
+    // The publish workflow builds the version named here, so this is the one place to bump it.
+    implementation("com.openwearables.health:sdk:0.13.1")
 }

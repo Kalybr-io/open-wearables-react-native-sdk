@@ -26,6 +26,7 @@ public class OpenWearablesModule: Module {
         
         // MARK: - Configure        
         Function("configure") { (host: String, customSyncURL: String?) in
+            // TODO: customSyncURL is dropped — the iOS SDK's configure(host:) takes no such parameter.
             OpenWearablesHealthSDK.shared.configure(host: host)
         }
         
@@ -88,12 +89,6 @@ public class OpenWearablesModule: Module {
             promise.resolve()
         }
         
-        AsyncFunction("syncNow") { (promise: Promise) in
-            OpenWearablesHealthSDK.shared.syncNow {
-                promise.resolve()
-            }
-        }
-        
         AsyncFunction("resumeSync") { (promise: Promise) in
             OpenWearablesHealthSDK.shared.resumeSync { resumed in
                 promise.resolve(resumed)
@@ -113,13 +108,24 @@ public class OpenWearablesModule: Module {
         }
         
         Function("getStoredCredentials") {
-            return OpenWearablesHealthSDK.shared.getStoredCredentials()
+            var credentials = OpenWearablesHealthSDK.shared.getStoredCredentials()
+            // TODO: the iOS SDK exposes no accessor for customSyncUrl yet — null until the native SDK adds one.
+            // updateValue(_:forKey:) stores a null; subscript assignment would delete the key instead.
+            credentials.updateValue(nil, forKey: "customSyncUrl")
+            credentials.updateValue("apple", forKey: "provider")
+            return credentials
         }
 
-        // MARK: - Providers (not implemented in iOS SDK)        
-        Function("getAvailableProviders") { return [] }
-        
-        Function("setProvider") { }
+        // MARK: - Providers (iOS has exactly one: HealthKit)
+        Function("getAvailableProviders") {
+            return [
+                ["id": "apple", "displayName": "Apple Health", "isAvailable": true]
+            ]
+        }
+
+        Function("setProvider") { (providerId: String) in
+            return providerId == "apple"
+        }
 
         // MARK: - Logs
         Function("setLogLevel") { (levelId: Int) in

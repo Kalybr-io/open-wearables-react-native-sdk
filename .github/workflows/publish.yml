@@ -4,7 +4,8 @@ name: Publish
 # registry when a version tag (v*) is pushed. The Expo module is built via the
 # package's own `prepare` / `prepublishOnly` hooks (expo-module-scripts), so the
 # published tarball ships a fresh `build/` alongside the native ios/android/src
-# sources and app.plugin.js declared in package.json "files".
+# sources and app.plugin.js declared in package.json "files". It also bundles the
+# native Android SDK into android/maven (see the steps below).
 #
 # Release flow: bump "version" in package.json, commit, then
 #   git tag v0.1.0 && git push origin v0.1.0
@@ -37,6 +38,38 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # The native Android SDK isn't on Maven Central, so it's built from upstream's source at the
+      # version android/build.gradle depends on and bundled into android/maven (with the Samsung
+      # Health SDK it brings). Gradle in the app finds it there through the config plugin.
+      - name: Read the native Android SDK version
+        id: native
+        run: echo "version=$(grep -oP 'com\.openwearables\.health:sdk:\K[0-9.]+' android/build.gradle)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the native Android SDK
+        uses: actions/checkout@v4
+        with:
+          repository: the-momentum/open_wearables_android_sdk
+          ref: v${{ steps.native.outputs.version }}
+          path: native-android
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build the native Android SDK into Maven Local
+        working-directory: native-android
+        run: ./gradlew :sdk:publishReleasePublicationToMavenLocal -PlocalPublishVersion=${{ steps.native.outputs.version }}
+
+      - name: Bundle it into android/maven
+        run: |
+          mkdir -p android/maven/com/samsung/android
+          cp -R ~/.m2/repository/com/openwearables android/maven/com/
+          cp -R ~/.m2/repository/com/samsung/android/health android/maven/com/samsung/android/
+          test -f "android/maven/com/openwearables/health/sdk/${{ steps.native.outputs.version }}/sdk-${{ steps.native.outputs.version }}.aar"
+          find android/maven -type f
 
       - name: Publish to GitHub Packages
         run: npm publish

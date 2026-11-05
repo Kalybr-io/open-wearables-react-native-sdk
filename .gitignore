@@ -55,3 +55,6 @@ yarn-error.log
 
 # Expo
 .expo/*
+
+# Bundled at publish time by .github/workflows/publish.yml
+android/maven/

@@ -14,6 +14,11 @@ const PROVIDER_META: Record<
   string,
   { iconName: string; iconBgColor: string; description: string }
 > = {
+  apple: {
+    iconName: "logo-apple",
+    iconBgColor: "#FF2D55",
+    description: "Health Kit on iPhone and Apple Watch",
+  },
   samsung: {
     iconName: "phone-portrait-outline",
     iconBgColor: "#00B140",
@@ -29,10 +34,6 @@ const PROVIDER_META: Record<
 function getProviderMeta(provider: HealthDataProvider) {
   const byId = PROVIDER_META[provider.id];
   if (byId) return byId;
-
-  const name = provider.displayName.toLowerCase();
-  if (name.includes("samsung")) return PROVIDER_META.samsung_health;
-  if (name.includes("health connect")) return PROVIDER_META.health_connect;
 
   return {
     iconName: "heart-outline",

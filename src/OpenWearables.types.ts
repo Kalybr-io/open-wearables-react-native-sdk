@@ -86,3 +86,29 @@ export type HealthDataProvider = {
   displayName: string;
   isAvailable: boolean;
 };
+
+export type StoredCredentials = {
+  userId: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  apiKey: string | null;
+  host: string | null;
+  /** Always null on iOS — the native SDK exposes no accessor for it yet. */
+  customSyncUrl: string | null;
+  isSyncActive: boolean;
+  /** `"apple"` on iOS; `"google"` or `"samsung"` on Android; null when none is selected. */
+  provider: string | null;
+};
+
+export type SyncStatus = {
+  hasResumableSession: boolean;
+  sentCount: number;
+  completedTypes: number;
+  isFullExport: boolean;
+  /** False while the initial full historical export is still pending or in progress. */
+  initialExportDone: boolean;
+  /** True while a sync round is currently in flight. */
+  isSyncing: boolean;
+  /** ISO8601 timestamp of the current sync session, or null when there is none. */
+  createdAt: string | null;
+};

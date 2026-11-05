@@ -10,7 +10,40 @@ It is a wrapper for the native iOS and Android SDKs to allow React Native apps t
 | Platform | Status                                                                        |
 | -------- | ----------------------------------------------------------------------------- |
 | iOS      | Implemented (via `OpenWearablesHealthSDK` CocoaPod, requires iOS 15.1+)       |
-| Android  | Implemented (via Maven Local dependency `com.openwearables.health:sdk:0.11.1`) |
+| Android  | Implemented (via Maven Local dependency `com.openwearables.health:sdk:0.11.2`) |
+
+## Migration to 0.2.0
+
+`syncNow()` has been removed from the JS API, following its removal from the native iOS (`0.14.0`)
+and Android (`0.11.2`) SDKs. **There is no replacement.** The native SDKs now resume sync
+automatically when the app returns to the foreground, so a manual trigger is no longer needed —
+delete any `await OpenWearablesHealthSDK.syncNow()` calls.
+
+`resumeSync()` is *not* a drop-in replacement: it only does anything when a resumable sync session
+exists, and is unrelated to triggering a fresh sync round.
+
+`getSyncStatus()` is now typed as [`SyncStatus`](#getsyncstatus-syncstatus) instead of
+`Record<string, any>`, and gained two fields: `initialExportDone` and `isSyncing`.
+
+`getStoredCredentials()` is now typed as [`StoredCredentials`](#getstoredcredentials-storedcredentials)
+instead of `Record<string, any>`, and returns the same eight keys on both platforms.
+
+`resumeSync()` now resolves `false` uniformly when there is nothing to resume. It previously
+rejected with `No resumable sync session` on Android while iOS resolved `false`.
+
+## Platform differences
+
+The JS API is identical on both platforms, but two calls cannot behave identically because the
+underlying native SDKs differ:
+
+| API | iOS | Android |
+| --- | --- | --- |
+| `setSyncInterval(minutes)` | **No-op.** The iOS SDK has no sync-interval API; the system schedules background delivery itself. | Honoured, but floored at 15 minutes by WorkManager. |
+| `configure(host, customSyncURL)` | `customSyncURL` is **ignored** — the iOS SDK's `configure(host:)` accepts no such parameter, and `getStoredCredentials().customSyncUrl` is therefore always `null`. | Both arguments are honoured and reflected in `getStoredCredentials()`. |
+
+`getAvailableProviders()` returns a single `apple` / "Apple Health" entry on iOS, and the installed
+provider(s) (`google`, `samsung`) on Android. Accordingly `setProvider("apple")` resolves `true` on
+iOS and any other id resolves `false`.
 
 ## Installation
 
@@ -67,7 +100,7 @@ cd ios && pod install
 The Android implementation currently relies on a local Maven dependency:
 
 ```
-implementation("com.openwearables.health:sdk:0.11.1")
+implementation("com.openwearables.health:sdk:0.11.2")
 ```
 
 To test the Android integration using `mavenLocal`, please refer to the setup instructions in the example app:
@@ -129,9 +162,6 @@ await OpenWearablesHealthSDK.requestAuthorization([
 
 // Start background sync
 await OpenWearablesHealthSDK.startBackgroundSync();
-
-// Sync immediately
-await OpenWearablesHealthSDK.syncNow();
 ```
 
 ## API
@@ -154,13 +184,14 @@ Signs in a user. `accessToken`, `refreshToken`, and `apiKey` are optional.
 
 Signs out the current user.
 
-#### `updateTokens(accessToken: string, refreshToken: string): void`
+#### `updateTokens(accessToken: string, refreshToken: string | null): void`
 
 Updates the stored auth tokens.
 
-#### `restoreSession(): Promise<boolean>`
+#### `restoreSession(): string | null`
 
-Attempts to restore a previously saved session. Returns `true` if successful.
+Attempts to restore a previously saved session. Synchronous — returns the restored user id, or
+`null` when there is no session to restore.
 
 #### `isSessionValid(): boolean`
 
@@ -180,37 +211,103 @@ See `[HealthDataType](#healthdatatype)` for the full list of supported types.
 
 ### Sync
 
-#### `startBackgroundSync(): Promise<boolean>`
+#### `startBackgroundSync(syncDaysBack?: number): Promise<boolean>`
 
-Starts background health data sync. Returns `true` if started successfully.
+Starts background health data sync, optionally limiting how many days back to sync. Resolves `true`
+if started successfully, and `false` when it could not start — most commonly because the SDK is not
+configured or no user is signed in. It resolves `false` rather than rejecting on both platforms.
+
+> **Widening the range needs `resetAnchors()` first.** Query anchors survive `stopBackgroundSync()`,
+> and neither native SDK compares the new `syncDaysBack` against the previous one. After a first
+> sync completes, a restart with a larger `syncDaysBack` (or `undefined`) takes the incremental
+> path and **will not backfill the newly-included older days** — on iOS because the stored
+> `HKQueryAnchor` is a position in HealthKit's global change log, on Android because the incremental
+> cursor is `max(storedAnchor, newFloor)`. Narrowing the range needs no reset.
+>
+> Call [`resetAnchors()`](#resetanchors-void) **while sync is stopped**, then start:
+>
+> ```ts
+> await OpenWearablesHealthSDK.stopBackgroundSync();
+> OpenWearablesHealthSDK.resetAnchors();
+> await OpenWearablesHealthSDK.startBackgroundSync(30);
+> ```
+>
+> Resetting *after* `startBackgroundSync` also eventually works, but the immediate full export it
+> tries to trigger is dropped by the SDKs' "sync already in progress" guard, so the backfill is
+> deferred to the next background trigger — and clearing the session and outbox mid-flight can drop
+> batches that were pending upload.
 
 #### `stopBackgroundSync(): void`
 
 Stops background sync.
 
-#### `syncNow(): Promise<void>`
-
-Triggers an immediate sync.
-
 #### `resumeSync(): Promise<boolean>`
 
-Resumes a previously paused sync.
+Resumes an interrupted sync session, continuing from the records already sent. Resolves `false` when
+there is no resumable session (on both platforms — see [Migration to 0.2.0](#migration-to-020)).
+
+Both native SDKs already resume automatically when the app returns to the foreground, so this is a
+manual retry rather than the primary mechanism — useful when a resume ran and died again while the
+app stayed foregrounded.
+
+Do **not** treat the resolved value as "a sync started": calling it while a round is already in
+flight is safe but still resolves `true` having done nothing. Poll `getSyncStatus().isSyncing`
+instead. On iOS the promise only settles once the whole round finishes, which can take minutes.
+
+Gate any "resume" affordance on `!isSyncing && hasResumableSession` — `hasResumableSession` stays
+`true` for the duration of an active round, so on its own it does not mean sync is stalled.
 
 #### `isSyncActive(): boolean`
 
 Returns whether background sync is currently active.
 
-#### `getSyncStatus(): Record<string, any>`
+#### `getSyncStatus(): SyncStatus`
 
-Returns the current sync status.
+Returns the current sync status. Synchronous — no `await` needed.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `hasResumableSession` | `boolean` | Whether an interrupted sync session can be resumed. |
+| `sentCount` | `number` | Number of records sent in the current session. |
+| `completedTypes` | `number` | How many health data types have finished exporting. |
+| `isFullExport` | `boolean` | Whether the current session is a full historical export. |
+| `initialExportDone` | `boolean` | `false` while the initial full historical export is still pending or in progress. |
+| `isSyncing` | `boolean` | `true` while a sync round is currently in flight. |
+| `createdAt` | `string \| null` | ISO8601 timestamp of the current sync session, or `null` when there is none. |
+
+While `initialExportDone === false`, the historical backfill has not finished — prompt the user
+to keep the app open so the export can complete.
 
 #### `resetAnchors(): void`
 
-Resets the HealthKit query anchors, forcing a full re-sync on the next run.
+Resets the query anchors, forcing a full re-sync on the next run. Synchronous — no `await` needed.
 
-#### `getStoredCredentials(): Record<string, any>`
+Two things to know before calling it:
 
-Returns the credentials currently stored by the SDK.
+- **The overlapping window is re-uploaded.** The next run re-fetches everything inside the current
+  `syncDaysBack` range, including records already sent. There is no client-side dedup — the SDKs
+  expect the backend to deduplicate.
+- **Call it while sync is stopped.** If sync is still active, `resetAnchors()` immediately kicks off
+  a full export using the *currently persisted* `syncDaysBack`, which is only updated inside
+  `startBackgroundSync`.
+
+See the note under [`startBackgroundSync`](#startbackgroundsyncsyncdaysback-number-promiseboolean)
+for when a reset is required.
+
+#### `getStoredCredentials(): StoredCredentials`
+
+Returns the credentials currently stored by the SDK. Synchronous — no `await` needed.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `userId` | `string \| null` | The signed-in user id. |
+| `accessToken` | `string \| null` | Stored access token. |
+| `refreshToken` | `string \| null` | Stored refresh token. |
+| `apiKey` | `string \| null` | Stored API key. |
+| `host` | `string \| null` | Backend host passed to `configure()`. |
+| `customSyncUrl` | `string \| null` | Custom sync URL. **Always `null` on iOS** — see [Platform differences](#platform-differences). |
+| `isSyncActive` | `boolean` | Whether background sync is currently active. |
+| `provider` | `string \| null` | `"apple"` on iOS; `"google"` or `"samsung"` on Android; `null` when none is selected. |
 
 ---
 
